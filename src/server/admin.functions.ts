@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import { eq, desc, count, sql } from 'drizzle-orm'
+import { eq, desc, count, sql, limit, offset } from 'drizzle-orm'
 import { db } from '../../db'
 import {
   vendors,
@@ -17,6 +17,8 @@ import {
 } from '../../db/schema'
 import { requireAdminMiddleware } from '../middleware/identity'
 
+const LIST_PAGE_SIZE = 50
+
 export const getAdminOverview = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
   .handler(async () => {
@@ -30,8 +32,14 @@ export const getAdminOverview = createServerFn({ method: 'GET' })
       .from(drivers)
       .where(eq(drivers.status, 'pending'))
     const [orderCount] = await db.select({ n: count() }).from(orders)
-    const paidOrders = await db.select().from(orders).where(eq(orders.paymentStatus, 'paid'))
-    const gmv = paidOrders.reduce((sum, o) => sum + Number(o.total), 0)
+    
+    // Calcul du GMV avec une requête SQL agrégée au lieu de charger toutes les commandes
+    const [gmvResult] = await db
+      .select({ total: sql<number>`coalesce(sum(${orders.total}), 0)` })
+      .from(orders)
+      .where(eq(orders.paymentStatus, 'paid'))
+    const gmv = Number(gmvResult?.total ?? 0)
+    
     const [openTickets] = await db
       .select({ n: count() })
       .from(supportTickets)
@@ -49,15 +57,42 @@ export const getAdminOverview = createServerFn({ method: 'GET' })
 
 export const listAllVendors = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(vendors).orderBy(desc(vendors.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(vendors)
+      .orderBy(desc(vendors.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const listAllDrivers = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(drivers).orderBy(desc(drivers.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(drivers)
+      .orderBy(desc(drivers.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const listAllKyc = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(kycDocuments).orderBy(desc(kycDocuments.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(kycDocuments)
+      .orderBy(desc(kycDocuments.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const reviewVendor = createServerFn({ method: 'POST' })
   .middleware([requireAdminMiddleware])
@@ -107,7 +142,16 @@ export const reviewDriver = createServerFn({ method: 'POST' })
 
 export const listAllOrders = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(orders).orderBy(desc(orders.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(orders)
+      .orderBy(desc(orders.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const assignDriverToOrder = createServerFn({ method: 'POST' })
   .middleware([requireAdminMiddleware])
@@ -165,7 +209,16 @@ export const createCoupon = createServerFn({ method: 'POST' })
 
 export const listCoupons = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(coupons).orderBy(desc(coupons.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(coupons)
+      .orderBy(desc(coupons.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const createInvestmentProject = createServerFn({ method: 'POST' })
   .middleware([requireAdminMiddleware])
@@ -198,7 +251,16 @@ export const createInvestmentProject = createServerFn({ method: 'POST' })
 
 export const listAllTickets = createServerFn({ method: 'GET' })
   .middleware([requireAdminMiddleware])
-  .handler(async () => db.select().from(supportTickets).orderBy(desc(supportTickets.createdAt)))
+  .inputValidator(z.object({ page: z.number().int().min(1).default(1) }).optional())
+  .handler(async ({ data }) => {
+    const page = data?.page ?? 1
+    return db
+      .select()
+      .from(supportTickets)
+      .orderBy(desc(supportTickets.createdAt))
+      .limit(LIST_PAGE_SIZE)
+      .offset((page - 1) * LIST_PAGE_SIZE)
+  })
 
 export const updateTicketStatus = createServerFn({ method: 'POST' })
   .middleware([requireAdminMiddleware])
