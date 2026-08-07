@@ -1,4 +1,4 @@
-import { eq, desc, inArray } from 'drizzle-orm'
+import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { db } from '../../db'
 import { vendors, kycDocuments, products, orderItems, orders } from '../../db/schema'
 
@@ -37,27 +37,31 @@ export async function listVendorOrders(vendorId: number) {
 }
 
 export async function vendorStats(vendorId: number) {
-  const vendorProducts = await listVendorProducts(vendorId)
-  const vendorOrderItems = await db
-    .select()
+  // Compter les produits avec une requête SQL agrégée
+  const productCountResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(products)
+    .where(eq(products.vendorId, vendorId))
+  const productCount = Number(productCountResult[0]?.count ?? 0)
+
+  // Calculer le revenu et le nombre de commandes payées avec une jointure SQL
+  // On joint orderItems avec orders pour filtrer uniquement les commandes payées
+  const revenueResult = await db
+    .select({
+      totalRevenue: sql<number>`coalesce(sum(${orderItems.lineTotal} - ${orderItems.commissionAmount}), 0)`,
+      ordersCount: sql<number>`count(distinct ${orderItems.orderId})`,
+    })
     .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(eq(orderItems.vendorId, vendorId))
+    .where(eq(orders.paymentStatus, 'paid'))
 
-  const paidOrderIds = new Set(
-    (
-      await db.select().from(orders).where(eq(orders.paymentStatus, 'paid'))
-    ).map((o) => o.id),
-  )
-
-  const paidItems = vendorOrderItems.filter((i) => paidOrderIds.has(i.orderId))
-  const revenue = paidItems.reduce(
-    (sum, i) => sum + (Number(i.lineTotal) - Number(i.commissionAmount)),
-    0,
-  )
+  const revenue = Number(revenueResult[0]?.totalRevenue ?? 0)
+  const ordersCount = Number(revenueResult[0]?.ordersCount ?? 0)
 
   return {
-    productCount: vendorProducts.length,
-    ordersCount: new Set(paidItems.map((i) => i.orderId)).size,
+    productCount,
+    ordersCount,
     revenue,
   }
 }
