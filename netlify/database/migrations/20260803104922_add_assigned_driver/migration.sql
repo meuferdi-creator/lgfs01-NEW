@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ADD COLUMN "assigned_driver_id" integer;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_assigned_driver_id_drivers_id_fkey" FOREIGN KEY ("assigned_driver_id") REFERENCES "drivers"("id");
